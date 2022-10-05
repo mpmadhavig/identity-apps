@@ -21,6 +21,7 @@ import {
     AnimatedAvatar,
     AppAvatar,
     Code,
+    CopyInputField,
     DocumentationLink,
     Heading,
     Hint,
@@ -35,7 +36,7 @@ import union from "lodash-es/union";
 import React, { Fragment, FunctionComponent, ReactElement, SyntheticEvent, useEffect, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
-import { Grid, Header, Icon, Input, Table } from "semantic-ui-react";
+import { Form, Grid, Header, Icon, Input, Message, Table  } from "semantic-ui-react";
 import { AttributeListItem } from "./attribute-list-item";
 import {
     ExtendedClaimInterface,
@@ -128,6 +129,8 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
 
     const [ expandedScopes, setExpandedScopes ] = useState<string[]>([]);
 
+    const [ selectedScopes, setSelectedScopes ] = useState([ "openid" ]);
+
     const [ initializationFinished, setInitializationFinished ] = useState<boolean>(false);
 
     const initValue = useRef(false);
@@ -202,16 +205,25 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
         = [ ...unfilteredExternalClaimsGroupedByScopes ];
 
         tempFilterSelectedExternalScopeClaims.forEach((scope) => {
+            let scopeSelected = false;
+
             scope.claims.forEach((claim) => {
                 if (claim.claimURI === claimURI) {
                     claim.requested = requested;
 
                     if (requested) {
-                        scope.selected = true;
+                        scopeSelected = true;
+                    }
+                } else {
+                    if (claim.requested) {
+                        scopeSelected = true;
                     }
                 }
             });
+
+            scope.selected = scopeSelected;
         });
+
         sortBy(tempFilterSelectedExternalScopeClaims, "name");
         setExternalClaimsGroupedByScopes(tempFilterSelectedExternalScopeClaims);
         setUnfilteredExternalClaimsGroupedByScopes(tempFilterSelectedExternalScopeClaims);
@@ -426,6 +438,21 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
             initValue.current = true;
         }
     }, [ claimConfigurations ]);
+
+    // update accordion panel and adjust selected scopes
+    useEffect(() => {
+        if (externalClaimsGroupedByScopes.length != 0) {
+            const initialSelectedScopes = [ "openid" ];
+
+            externalClaimsGroupedByScopes.map((scope) => {
+                if (scope.selected) {
+                    initialSelectedScopes.push(scope.name);
+                }
+            });
+
+            setSelectedScopes(initialSelectedScopes);
+        }
+    }, [ externalClaimsGroupedByScopes ]);
 
     /**
      * Check if the claim has OIDC mapping.
@@ -646,7 +673,7 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
             type: "checkbox popup",
             value: scope.name
         } ];
-    }
+    };
 
     return (
         (!isUserAttributesLoading && claimConfigurations && initializationFinished)
@@ -729,6 +756,38 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
                                                 })
                                         }
                                     </SegmentedAccordion>
+                                </Grid.Row>
+                                <Grid.Row style={ { "padding-bottom": "20px", "padding-top": "20px" } }>
+                                    <Grid.Column mobile={ 16 } tablet={ 16 } computer={ 16 }>
+                                        <Form.Field>
+                                            <label>
+                                                { "Selected Attributes Groups/Scopes" }
+                                            </label>
+                                            <div className="display-flex">
+                                                <CopyInputField
+                                                    className="copy-input spaced"
+                                                    value={ selectedScopes.join(" ") }
+                                                    data-testid={ `${ testId }-client-id-readonly-input` }
+                                                />
+                                            </div>
+                                        </Form.Field>
+                                        <Message
+                                            type="info"
+                                            content={
+                                                (<Trans
+                                                    // i18nKey={
+                                                    //     "console:develop.features.applications." +
+                                                    //     "forms.inboundOIDC.fields.clientSecret.message"
+                                                    // }
+                                                    // values="CLIENT SECRET"
+                                                >
+                                                    Usage:
+                                                    In SDK you can use in the following format.
+                                                    <Code withBackground>{ "{ scope: \"openid profile email\"}" }</Code>
+                                                </Trans>)
+                                            }
+                                        />
+                                    </Grid.Column>
                                 </Grid.Row>
                             </>
                             { !readOnly && applicationConfig.attributeSettings.attributeSelection

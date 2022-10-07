@@ -470,6 +470,7 @@ export interface ConsoleNS {
                                 heading: string;
                                 attributeComponentHint: string;
                                 attributeComponentHintAlt: string;
+                                selectedScopesComponentHint: string;
                                 description: string;
                                 mandatoryAttributeHint: string;
                                 mappingTable: {

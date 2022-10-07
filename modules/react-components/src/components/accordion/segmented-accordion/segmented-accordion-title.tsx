@@ -177,6 +177,7 @@ export const SegmentedAccordionTitle: FunctionComponent<SegmentedAccordionTitleP
 
         const {
             icon,
+            checked,
             label,
             onChange,
             onClick,
@@ -293,6 +294,7 @@ export const SegmentedAccordionTitle: FunctionComponent<SegmentedAccordionTitleP
                             <Checkbox
                                 label={ label }
                                 disabled={ disabled }
+                                checked={ checked }
                                 onChange={
                                     (e: FormEvent<HTMLInputElement>, data: CheckboxProps) => handleActionOnClick(
                                         onChange, e, data, id)

@@ -814,6 +814,8 @@ export const console: ConsoleNS = {
                                 attributeComponentHintAlt: "Gérez les attributs utilisateur que vous souhaitez" +
                                     " partager avec cette application. Vous pouvez ajouter de nouveaux attributs et " +
                                     "mappages en accédant à <1>Attributs</1>",
+                                selectedScopesComponentHint: "Retrouvez le guide d'utilisation des scopes à partir de <1> " + 
+                                    "l'utilisation des scopes OIDC.</1>",
                                 description: "Ajoutez les groupes/étendues d'attributs utilisateur autorisés à être partagés " +
                                     "avec cette application.",
                                 heading: "Sélection des attributs utilisateur",

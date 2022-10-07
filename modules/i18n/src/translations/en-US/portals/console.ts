@@ -810,6 +810,7 @@ export const console: ConsoleNS = {
                                 attributeComponentHintAlt: "Manage the user attributes you want to share with this" +
                                     " application. You can add new attributes and mappings by navigating to " +
                                     "<1>Attributes.</1>",
+                                selectedScopesComponentHint: "Find the usage guide of the scopes from <1>OIDC scope usage.</1>",
                                 description: "Add the user attributes groups/scopes that are allowed to be shared with this " +
                                     "application.",
                                 heading: "User Attribute Selection",

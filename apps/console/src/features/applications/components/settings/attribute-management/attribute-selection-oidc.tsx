@@ -21,6 +21,7 @@ import {
     AnimatedAvatar,
     AppAvatar,
     Code,
+    CodeEditor,
     CopyInputField,
     DocumentationLink,
     Heading,
@@ -36,7 +37,7 @@ import union from "lodash-es/union";
 import React, { Fragment, FunctionComponent, ReactElement, SyntheticEvent, useEffect, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
-import { Form, Grid, Header, Icon, Input, Message, Table  } from "semantic-ui-react";
+import { Form, Grid, Header, Icon, Input, Popup, Table  } from "semantic-ui-react";
 import { AttributeListItem } from "./attribute-list-item";
 import {
     ExtendedClaimInterface,
@@ -44,6 +45,7 @@ import {
     ExtendedExternalClaimInterface,
     SelectedDialectInterface
 } from "./attribute-settings";
+import { AttributeManagementConstants } from "./constants/attribute-management-constants";
 import { applicationConfig } from "../../../../../extensions";
 import { ClaimManagementConstants } from "../../../../claims/constants";
 import {
@@ -660,6 +662,7 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
         SegmentedAccordionTitleActionInterface[] => {
         
         return [ {
+            checked: scope.selected,
             defaultChecked: scope.selected,
             disabled: false,
             onChange: handleSelectedScopeCheckChange,
@@ -757,38 +760,6 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
                                         }
                                     </SegmentedAccordion>
                                 </Grid.Row>
-                                <Grid.Row style={ { "padding-bottom": "20px", "padding-top": "20px" } }>
-                                    <Grid.Column mobile={ 16 } tablet={ 16 } computer={ 16 }>
-                                        <Form.Field>
-                                            <label>
-                                                { "Selected Attributes Groups/Scopes" }
-                                            </label>
-                                            <div className="display-flex">
-                                                <CopyInputField
-                                                    className="copy-input spaced"
-                                                    value={ selectedScopes.join(" ") }
-                                                    data-testid={ `${ testId }-client-id-readonly-input` }
-                                                />
-                                            </div>
-                                        </Form.Field>
-                                        <Message
-                                            type="info"
-                                            content={
-                                                (<Trans
-                                                    // i18nKey={
-                                                    //     "console:develop.features.applications." +
-                                                    //     "forms.inboundOIDC.fields.clientSecret.message"
-                                                    // }
-                                                    // values="CLIENT SECRET"
-                                                >
-                                                    Usage:
-                                                    In SDK you can use in the following format.
-                                                    <Code withBackground>{ "{ scope: \"openid profile email\"}" }</Code>
-                                                </Trans>)
-                                            }
-                                        />
-                                    </Grid.Column>
-                                </Grid.Row>
                             </>
                             { !readOnly && applicationConfig.attributeSettings.attributeSelection
                                 .showShareAttributesHint(selectedDialect)
@@ -802,7 +773,7 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
                                         >
                                             Manage the user attributes you want to share with this application via
                                             <Link
-                                                external={ false }
+                                                external={ true }
                                                 onClick={ () => {
                                                     history.push(
                                                         AppConstants.getPaths().get("OIDC_SCOPES")
@@ -851,6 +822,43 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
                             }
                         </Grid.Column>
                     </Grid.Row>
+                    <Grid.Row>
+                        <Grid.Column mobile={ 16 } tablet={ 16 } computer={ 16 }>
+                            <Grid.Row>
+                                <Form>
+                                    <Grid.Column>
+                                        <Form.Field>
+                                            <label>
+                                                { "Selected Attributes Groups/Scopes " }
+                                            </label>
+                                            <div className="display-flex">
+                                                <CopyInputField
+                                                    className="copy-input spaced"
+                                                    value={ selectedScopes.join(" ") }
+                                                    data-testid={ `${ testId }-client-id-readonly-input` }
+                                                />
+                                            </div>
+                                        </Form.Field>
+                                    </Grid.Column>
+                                </Form>
+                            </Grid.Row>
+                        </Grid.Column>
+                    </Grid.Row>
+                    <Hint>
+                        <Trans
+                            i18nKey={
+                                "console:develop.features.applications.edit.sections.attributes." +
+                                                "selection.selectedScopesComponentHint"
+                            }
+                        >
+                                Find the usage guide of the scopes from
+                            <Link
+                                external={ false }
+                                link = "https://is.docs.wso2.com/en/latest/"
+                            > OIDC scope usage.
+                            </Link>
+                        </Trans>
+                    </Hint>
                 </>
             )
             : null

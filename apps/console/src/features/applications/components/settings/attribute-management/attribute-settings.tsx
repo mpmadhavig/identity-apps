@@ -222,6 +222,10 @@ export const AttributeSettings: FunctionComponent<AttributeSelectionPropsInterfa
     // Role Mapping.
     const [ roleMapping, setRoleMapping ] = useState<RoleMappingInterface[]>(claimConfigurations?.role?.mappings ?? []);
 
+    const [ allowAllAttributes, setAllowAllAttributes ] = useState<boolean>(
+        claimConfigurations?.allAttributesAllowed
+    );
+
     const [ isClaimLoading, setIsClaimLoading ] = useState<boolean>(true);
     const [ isUserAttributesLoading, setUserAttributesLoading ] = useState<boolean>(undefined);
 
@@ -271,9 +275,7 @@ export const AttributeSettings: FunctionComponent<AttributeSelectionPropsInterfa
     }, [ isOIDCScopeListLoading ]);
 
     useEffect(() => {
-        if (externalClaims.length !== 0) {
-            getExternalClaimsGroupedByScopes();
-        }
+        getExternalClaimsGroupedByScopes();
     }, [ externalClaims ]);
 
     /**
@@ -966,10 +968,14 @@ export const AttributeSettings: FunctionComponent<AttributeSelectionPropsInterfa
                             mandatory: claim.mandatory
                         };
 
-                        RequestedClaims.push(requestedClaim);
+                        if (!RequestedClaims.find((claimRequested) => 
+                            claimRequested.claim.uri === requestedClaim.claim.uri)) {
+                            RequestedClaims.push(requestedClaim);
+                        }
                     }
                 });
             });
+            console.log("RequestedClaims", RequestedClaims);
         }
 
         if (claimMappingFinal.findIndex(mapping => mapping.localClaim.uri === DefaultSubjectAttribute) < 0
@@ -993,6 +999,7 @@ export const AttributeSettings: FunctionComponent<AttributeSelectionPropsInterfa
             claimConfiguration: {
                 claimMappings: claimMappingFinal.length > 0 ? claimMappingFinal : [],
                 dialect: claimMappingFinal.length > 0 ? "CUSTOM" : "LOCAL",
+                allAttributesAllowed: allowAllAttributes,
                 requestedClaims: RequestedClaims,
                 role: {
                     claim: {
@@ -1088,6 +1095,10 @@ export const AttributeSettings: FunctionComponent<AttributeSelectionPropsInterfa
                                                 }
                                                 setUnfilteredExternalClaimsGroupedByScopes = { 
                                                     setUnfilteredExternalClaimsGroupedByScopes
+                                                }
+                                                allowAllAttributes = { allowAllAttributes }
+                                                setAllowAllAttributes = { 
+                                                    setAllowAllAttributes 
                                                 }
                                                 setExternalClaims={ setExternalClaims }
                                                 selectedExternalClaims={ selectedExternalClaims }

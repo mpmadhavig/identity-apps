@@ -17,6 +17,7 @@
  */
 
 import { ExternalClaim, TestableComponentInterface } from "@wso2is/core/models";
+import { Field, Forms } from "@wso2is/forms";
 import {
     AnimatedAvatar,
     AppAvatar,
@@ -64,6 +65,8 @@ interface AttributeSelectionOIDCPropsInterface extends TestableComponentInterfac
     setExternalClaimsGroupedByScopes: any;
     unfilteredExternalClaimsGroupedByScopes: OIDCScopesClaimsListInterface[];
     setUnfilteredExternalClaimsGroupedByScopes: any;
+    allowAllAttributes: boolean;
+    setAllowAllAttributes: any;
     setExternalClaims: any;
     selectedExternalClaims: ExtendedExternalClaimInterface[];
     setSelectedExternalClaims: any;
@@ -102,6 +105,8 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
         setExternalClaims,
         unfilteredExternalClaimsGroupedByScopes,
         setUnfilteredExternalClaimsGroupedByScopes,
+        allowAllAttributes,
+        setAllowAllAttributes,
         selectedExternalClaims,
         selectedDialect,
         setSelectedExternalClaims,
@@ -137,6 +142,36 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
     const config: ConfigReducerStateInterface = useSelector((state: AppState) => state.config);
 
     const [ openIDConnectClaims ] = useState<ExtendedExternalClaimInterface[]>(externalClaims);
+
+    const filterTypeElement = useRef<HTMLElement>();
+
+    const TYPE_1 = "onlyScopesRequested";
+    const TYPE_1_LABEL = "All attributes are selected";
+    const TYPE_2 = "bothScopesRequestedAndScopesConfiguredHere";
+    const TYPE_2_LABEL = "Only the selected attribute will be allowed";
+
+    const [ toggleLable, setToggleLabel ] = useState<string>(
+        allowAllAttributes
+            ? TYPE_1_LABEL
+            : TYPE_2_LABEL
+    );
+
+    const [ filterType, setFilterType ] = useState<string>(
+        allowAllAttributes
+            ? TYPE_1
+            : TYPE_2
+    );
+
+    const filterOptions = [
+        {
+            label: TYPE_1_LABEL,
+            value: TYPE_1
+        },
+        {
+            label: TYPE_2_LABEL,
+            value: TYPE_2
+        }
+    ];
 
     useEffect(() => {
         const tempFilterSelectedExternalClaims = [ ...filterSelectedExternalClaims ];
@@ -268,6 +303,45 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
                 updateMandatory(claim.claimURI, value.checked);
             }
         });
+    };
+
+    const [ 
+        savePreviousClaimConfig, 
+        setSavePreviousClaimConfig 
+    ] = useState<OIDCScopesClaimsListInterface[]>(unfilteredExternalClaimsGroupedByScopes);
+
+    /**
+     * Handles the selected scope list item change event
+     *
+     * @param event - Change Event.
+     * @param value - Value of the step.
+     */
+    const selectAllAttributes = (checked: boolean): void => {
+        let tempExternalClaimsGroupedByScopes: OIDCScopesClaimsListInterface[] = [];
+        const prevSavePreviousClaimConfigState = [];
+
+        if (checked) {
+            tempExternalClaimsGroupedByScopes = [ ...unfilteredExternalClaimsGroupedByScopes ];
+            tempExternalClaimsGroupedByScopes.map((scope) => {
+                const prevScopeState = { ...scope };
+
+                prevScopeState.claims = [];
+                scope.claims.map((claim: ExtendedExternalClaimInterface) => {
+                    prevScopeState.claims.push({ ...claim });
+                    claim.requested = true;
+                });
+                scope.selected = true;
+                prevSavePreviousClaimConfigState.push(prevScopeState);
+            });
+
+            setSavePreviousClaimConfig(prevSavePreviousClaimConfigState);
+        } else {
+            tempExternalClaimsGroupedByScopes = [ ...savePreviousClaimConfig ];
+        }
+
+        setExternalClaimsGroupedByScopes(tempExternalClaimsGroupedByScopes);
+        setUnfilteredExternalClaimsGroupedByScopes(tempExternalClaimsGroupedByScopes);
+        searchFilter(searchValue);
     };
 
     /**
@@ -555,6 +629,7 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
                 data-testid={ `${ testId }-list` }
                 data-componentId={ `${ componentId }-list` }
                 fixed
+                className={ filterType === TYPE_1 ? "disabled" : "" }
             >
                 <Table.Header className="table-header-oidc-user-attribute">
                     <Table.Row>
@@ -623,14 +698,7 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
                                         selectMandatory={ updateMandatory }
                                         selectRequested={ updateRequested }
                                         initialRequested={ claim.requested }
-                                        readOnly={
-                                            (selectedSubjectValue
-                                        === claim.mappedLocalClaimURI &&
-                                        !onlyOIDCConfigured
-                                        || !checkMapping(claim))
-                                                ? true
-                                                : readOnly
-                                        }
+                                        readOnly={ readOnly || filterType === TYPE_1 }
                                         localClaimDisplayName={
                                             claim.localClaimDisplayName
                                         }
@@ -697,172 +765,221 @@ export const AttributeSelectionOIDC: FunctionComponent<AttributeSelectionOIDCPro
                                         ".attributes.selection.heading")
                                 }
                             </Heading>
-                            <Heading as="h6" color="grey">
+                            
+                            
+                            <Grid.Row>
+                                <Forms>
+                                    {/* <Field
+                                        ref={ filterTypeElement }
+                                        name="type"
+                                        default={ filterType }
+                                        type="radio"
+                                        children={ filterOptions }
+                                        readOnly={ readOnly }
+                                        data-testid={ `${ testId }-filter-type` }
+                                        listen={ (values) => {
+                                            setFilterType(values.get("type") as string);
+                                            setAllowAllAttributes(values.get("type") === TYPE_1);
+                                            selectAllAttributes(values.get("type") === TYPE_1);
+                                        } }
+                                    />  */}
+                                    <Field
+                                        label={ toggleLable }
+                                        type="toggle"
+                                        value={ filterType === TYPE_1 ? "false" : "true" }
+                                        name="type"
+                                        toggle
+                                        listen={ (values) => {
+                                            setFilterType(
+                                                values.get("type") === "true"
+                                                    ? TYPE_2
+                                                    : TYPE_1
+                                            );
+                                            setAllowAllAttributes(values.get("type") !== "true");
+                                            setToggleLabel(
+                                                values.get("type") === "true"
+                                                    ? TYPE_2_LABEL
+                                                    : TYPE_1_LABEL
+                                            );
+                                            selectAllAttributes(values.get("type") === "false");
+                                        } }
+                                    />
+                                </Forms>
+                            </Grid.Row>
+                            <Heading as="h6" color="grey" className={ filterType === TYPE_1 ? "disabled" : "" }>
                                 { t("console:develop.features.applications.edit.sections.attributes.selection" +
                                 ".description") }
                                 { resolveClaimDocumentationLink() }
                             </Heading>
-                            <>
-                                <Grid.Row className="user-role-edit-header-segment clearing attributes">
-                                    <Table
-                                        data-testid={ `${ testId }-action-bar` }
-                                        data-componentid={  `${ componentId }-action-bar` }
-                                        basic="very"
-                                        compact
-                                    >
-                                        <Table.Body>
-                                            <Table.Row>
-                                                <Table.Cell collapsing width="16">
-                                                    <Input
-                                                        icon={ <Icon name="search" /> }
-                                                        iconPosition="left"
-                                                        onChange={ handleChange }
-                                                        placeholder={
-                                                            t("console:develop.features.applications.edit" +
+                            <Grid.Row className="user-role-edit-header-segment clearing attributes">
+                                <Table
+                                    data-testid={ `${ testId }-action-bar` }
+                                    data-componentid={  `${ componentId }-action-bar` }
+                                    basic="very"
+                                    compact
+                                >
+                                    <Table.Body>
+                                        <Table.Row>
+                                            <Table.Cell collapsing width="16">
+                                                <Input
+                                                    icon={ <Icon name="search" /> }
+                                                    iconPosition="left"
+                                                    onChange={ handleChange }
+                                                    placeholder={
+                                                        t("console:develop.features.applications.edit" +
                                                                     ".sections.attributes.selection.mappingTable" +
                                                                     ".searchPlaceholder")
-                                                        }
-                                                        floated="left"
-                                                        size="small"
-                                                        data-testid={ `${ testId }-search` }
-                                                        data-componentid={  `${ componentId }-search` }
-                                                    />
-                                                </Table.Cell>
-                                                <Table.Cell textAlign="right"></Table.Cell>
-                                            </Table.Row>
-                                        </Table.Body>
-                                    </Table>
-                                </Grid.Row>
-                                <Grid.Row className="mb-5">
-                                    {
-                                        externalClaimsGroupedByScopes.length !== 0
-                                            ? (
-                                                <SegmentedAccordion
-                                                    fluid
-                                                    data-testid={ `${ testId }-oidc-scopes` }
-                                                    data-componentid={  `${ componentId }-oidc-scopes` }
-                                                    viewType="table-view"
-                                                >
-                                                    {
-                                                        externalClaimsGroupedByScopes.map(
-                                                            (scope: OIDCScopesClaimsListInterface) => {
-                                                                if (scope.name !== ""){
-                                                                    return (
-                                                                        <Fragment key={ scope.name }>
-                                                                            <SegmentedAccordion.Title
-                                                                                id={ scope.name }
-                                                                                data-testid={ 
-                                                                                    `${testId}-${scope.name}-title` 
-                                                                                }
-                                                                                data-componentid={ 
-                                                                                    `${componentId}-${scope.name}
-                                                                                    -title` 
-                                                                                }
-                                                                                active={ 
-                                                                                    expandedScopes?.
-                                                                                        includes(scope.name) || false }
-                                                                                accordionIndex={ scope.name }
-                                                                                onClick={ 
-                                                                                    () => 
-                                                                                        handleAccordionTitleClick(scope)
-                                                                                }
-                                                                                content={ (
-                                                                                    resolveScopeListItem(scope)
-                                                                                ) }
-                                                                                hideChevron={ false }
-                                                                                actions={ 
-                                                                                    createAccordionTitleAction(scope) 
-                                                                                }
-                                                                            />
-                                                                            <SegmentedAccordion.Content
-                                                                                active={ 
-                                                                                    expandedScopes?.
-                                                                                        includes(scope.name) || false
-                                                                                }
-                                                                                data-testid={ 
-                                                                                    `${testId}-${scope.name}-content` 
-                                                                                }
-                                                                                data-componentid={ 
-                                                                                    `${componentId}-${scope.name}
-                                                                                    -content`
-                                                                                }
-                                                                                children={ 
-                                                                                    resolveUserAttributeList(scope
-                                                                                        .claims)
-                                                                                }
-                                                                            />
-                                                                        </Fragment>
-                                                                    );
-                                                                }
-                                                            }
-                                                        )
                                                     }
-                                                </SegmentedAccordion>
-                                            ) 
-                                            : (
-                                                <EmptyPlaceholder
-                                                    image={ getEmptyPlaceholderIllustrations().emptySearch }
-                                                    imageSize="tiny"
-                                                    title={ 
-                                                        t("console:develop.features.applications.edit.sections." +
-                                                        "attributes.emptySearchResults.title") }
-                                                    subtitle={ [
-                                                        t("console:develop.features.applications.edit.sections." +
-                                                        "attributes.emptySearchResults.subtitles.0",
-                                                        { searchQuery: searchValue }),
-                                                        t("console:develop.features.applications.edit.sections." +
-                                                        "attributes.emptySearchResults.subtitles.1")
-                                                    ] }
-                                                    data-testid={ `${ testId }-empty-search-placeholder` }
+                                                    disabled={ filterType === TYPE_1 }
+                                                    floated="left"
+                                                    size="small"
+                                                    data-testid={ `${ testId }-search` }
+                                                    data-componentid={  `${ componentId }-search` }
                                                 />
-                                            )
-                                    }
-                                </Grid.Row>
-                                <Grid.Row>
-                                    <SegmentedAccordion
-                                        fluid
-                                        data-testid={ `${ testId }-oidc-scopes` }
-                                        data-componentid={  `${ componentId }-oidc-scopes` }
-                                        viewType="table-view"
-                                    >
-                                        {
-                                            externalClaimsGroupedByScopes.map(
-                                                (scope: OIDCScopesClaimsListInterface) => {
-                                                    if (scope.name === ""){
-                                                        return (
-                                                            <Fragment key={ scope.name }>
-                                                                <SegmentedAccordion.Title
-                                                                    id={ scope.name }
-                                                                    data-testid={ `${testId}-${scope.name}-title` }
-                                                                    data-componentid={ `${componentId}-${scope.name}
+                                            </Table.Cell>
+                                            <Table.Cell textAlign="right"></Table.Cell>
+                                        </Table.Row>
+                                    </Table.Body>
+                                </Table>
+                            </Grid.Row>
+                            <Grid.Row className="mb-5">
+                                {
+                                    externalClaimsGroupedByScopes.length !== 0
+                                        ? (
+                                            <SegmentedAccordion
+                                                fluid
+                                                data-testid={ `${ testId }-oidc-scopes` }
+                                                data-componentid={  `${ componentId }-oidc-scopes` }
+                                                viewType="table-view"
+                                            >
+                                                {
+                                                    externalClaimsGroupedByScopes.map(
+                                                        (scope: OIDCScopesClaimsListInterface) => {
+                                                            if (scope.name !== ""){
+                                                                return (
+                                                                    <Fragment key={ scope.name }>
+                                                                        <SegmentedAccordion.Title
+                                                                            id={ scope.name }
+                                                                            data-testid={ 
+                                                                                `${testId}-${scope.name}-title` 
+                                                                            }
+                                                                            data-componentid={ 
+                                                                                `${componentId}-${scope.name}
+                                                                                    -title` 
+                                                                            }
+                                                                            active={ 
+                                                                                expandedScopes?.
+                                                                                    includes(scope.name) || false }
+                                                                            accordionIndex={ scope.name }
+                                                                            onClick={ 
+                                                                                () => 
+                                                                                    handleAccordionTitleClick(scope)
+                                                                            }
+                                                                            content={ (
+                                                                                resolveScopeListItem(scope)
+                                                                            ) }
+                                                                            hideChevron={ false }
+                                                                            actions={ 
+                                                                                createAccordionTitleAction(scope) 
+                                                                            }
+                                                                            className={ filterType === TYPE_1
+                                                                                ? "disabled"
+                                                                                : ""
+                                                                            }
+                                                                        />
+                                                                        <SegmentedAccordion.Content
+                                                                            active={ 
+                                                                                expandedScopes?.
+                                                                                    includes(scope.name) || false
+                                                                            }
+                                                                            data-testid={ 
+                                                                                `${testId}-${scope.name}-content` 
+                                                                            }
+                                                                            data-componentid={ 
+                                                                                `${componentId}-${scope.name}
+                                                                                    -content`
+                                                                            }
+                                                                            children={ 
+                                                                                resolveUserAttributeList(scope
+                                                                                    .claims)
+                                                                            }
+                                                                        />
+                                                                    </Fragment>
+                                                                );
+                                                            }
+                                                        }
+                                                    )
+                                                }
+                                            </SegmentedAccordion>
+                                        ) 
+                                        : (
+                                            <EmptyPlaceholder
+                                                image={ getEmptyPlaceholderIllustrations().emptySearch }
+                                                imageSize="tiny"
+                                                title={ 
+                                                    t("console:develop.features.applications.edit.sections." +
+                                                        "attributes.emptySearchResults.title") }
+                                                subtitle={ [
+                                                    t("console:develop.features.applications.edit.sections." +
+                                                        "attributes.emptySearchResults.subtitles.0",
+                                                    { searchQuery: searchValue }),
+                                                    t("console:develop.features.applications.edit.sections." +
+                                                        "attributes.emptySearchResults.subtitles.1")
+                                                ] }
+                                                data-testid={ `${ testId }-empty-search-placeholder` }
+                                            />
+                                        )
+                                }
+                            </Grid.Row>
+                            <Grid.Row>
+                                <SegmentedAccordion
+                                    fluid
+                                    data-testid={ `${ testId }-oidc-scopes` }
+                                    data-componentid={  `${ componentId }-oidc-scopes` }
+                                    viewType="table-view"
+                                >
+                                    {
+                                        externalClaimsGroupedByScopes.map(
+                                            (scope: OIDCScopesClaimsListInterface) => {
+                                                if (scope.name === ""){
+                                                    return (
+                                                        <Fragment key={ scope.name }>
+                                                            <SegmentedAccordion.Title
+                                                                id={ scope.name }
+                                                                data-testid={ `${testId}-${scope.name}-title` }
+                                                                data-componentid={ `${componentId}-${scope.name}
                                                                     -title` }
-                                                                    active={ expandedScopes?.includes(scope.name)
+                                                                active={ expandedScopes?.includes(scope.name)
                                                                             || false }
-                                                                    accordionIndex={ scope.name }
-                                                                    onClick={ () => handleAccordionTitleClick(scope) }
-                                                                    content={ (
-                                                                        resolveScopeListItem(scope)
-                                                                    ) }
-                                                                    hideChevron={ false }
-                                                                    actions={ createAccordionTitleAction(scope) }
-                                                                />
+                                                                accordionIndex={ scope.name }
+                                                                onClick={ () => handleAccordionTitleClick(scope) }
+                                                                content={ (
+                                                                    resolveScopeListItem(scope)
+                                                                ) }
+                                                                hideChevron={ false }
+                                                                actions={ createAccordionTitleAction(scope) }
+                                                                className={ filterType === TYPE_1
+                                                                    ? "disabled"
+                                                                    : ""
+                                                                }
+                                                            />
     
-                                                                <SegmentedAccordion.Content
-                                                                    active={ expandedScopes?.includes(scope.name)
+                                                            <SegmentedAccordion.Content
+                                                                active={ expandedScopes?.includes(scope.name)
                                                                             || false }
-                                                                    data-testid={ `${testId}-${scope.name}-content` }
-                                                                    data-componentid={ `${componentId}-${scope.name}
+                                                                data-testid={ `${testId}-${scope.name}-content` }
+                                                                data-componentid={ `${componentId}-${scope.name}
                                                                     -content` }
-                                                                    children={ resolveUserAttributeList(scope.claims) }
-                                                                />
-                                                            </Fragment>
-                                                        );
-                                                    }
-                                                })
-                                        }
-                                    </SegmentedAccordion>
-                                </Grid.Row>
-                            </>
+                                                                children={ resolveUserAttributeList(scope.claims) }
+                                                            />
+                                                        </Fragment>
+                                                    );
+                                                }
+                                            })
+                                    }
+                                </SegmentedAccordion>
+                            </Grid.Row>
+                            
                             { !readOnly && applicationConfig.attributeSettings.attributeSelection
                                 .showShareAttributesHint(selectedDialect)
                                 ? (

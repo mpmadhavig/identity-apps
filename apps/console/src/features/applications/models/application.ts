@@ -184,6 +184,7 @@ export interface SubjectConfigInterface {
 export interface ClaimConfigurationInterface {
     dialect: string;
     claimMappings?: ClaimMappingInterface[];
+    allAttributesAllowed: boolean;
     requestedClaims: RequestedClaimConfigurationInterface[];
     subject?: SubjectConfigInterface;
     role?: RoleConfigInterface;

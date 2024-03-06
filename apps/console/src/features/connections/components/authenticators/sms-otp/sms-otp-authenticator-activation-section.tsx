@@ -56,7 +56,7 @@ export const SmsOtpAuthenticatorActivationSection: FunctionComponent<SmsOtpAuthe
 
     useEffect(() => {
         if (!notificationSendersListFetchRequestError) {
-            if (notificationSendersList) {
+            if (notificationSendersList.length === 0) {
                 let enableSMSOTP: boolean = false;
 
                 for (const notificationSender of notificationSendersList) {
@@ -96,40 +96,43 @@ export const SmsOtpAuthenticatorActivationSection: FunctionComponent<SmsOtpAuthe
      * @param data - Data.
      */
     const handleUpdateSMSPublisher = ( event: React.FormEvent<HTMLInputElement>, data: CheckboxProps) => {
-        if (data.checked) {
-            // Add SMS Publisher when enabling the feature.
-            addSMSPublisher().then(() => {
-                setEnableSMSOTP(true);
-                onActivate(true);
-            }).catch(() => {
-                dispatch(addAlert({
-                    description: t("extensions:develop.identityProviders.smsOTP.settings" +
-                        ".errorNotifications.smsPublisherCreationError.description"),
-                    level: AlertLevels.ERROR,
-                    message: t("extensions:develop.identityProviders.smsOTP.settings" +
-                        ".errorNotifications.smsPublisherCreationError.message")
-                }));
-            });
-        } else {
-            // Delete SMS Publisher when enabling the feature.
-            deleteSMSPublisher().then(() => {
-                setEnableSMSOTP(false);
-                onActivate(false);
-            }).catch((error: IdentityAppsApiException) => {
-                const errorType : string = error.code === AuthenticatorManagementConstants.ErrorMessages
-                    .SMS_NOTIFICATION_SENDER_DELETION_ERROR_ACTIVE_SUBS.getErrorCode() ? "activeSubs" :
-                    ( error.code === AuthenticatorManagementConstants.ErrorMessages
-                        .SMS_NOTIFICATION_SENDER_DELETION_ERROR_CONNECTED_APPS.getErrorCode() ? "connectedApps"
-                        : "generic" );
-
-                dispatch(addAlert({
-                    description: t("extensions:develop.identityProviders.smsOTP.settings." +
-                        `errorNotifications.smsPublisherDeletionError.${errorType}.description`),
-                    level: AlertLevels.ERROR,
-                    message: t("extensions:develop.identityProviders.smsOTP.settings." +
-                        `errorNotifications.smsPublisherDeletionError.${errorType}.message`)
-                }));
-            });
+        // Create SMS Publisher only if does not exist.
+        if (notificationSendersList) {
+            if (data.checked) {
+                // Add SMS Publisher when enabling the feature.
+                addSMSPublisher().then(() => {
+                    setEnableSMSOTP(true);
+                    onActivate(true);
+                }).catch(() => {
+                    dispatch(addAlert({
+                        description: t("extensions:develop.identityProviders.smsOTP.settings" +
+                            ".errorNotifications.smsPublisherCreationError.description"),
+                        level: AlertLevels.ERROR,
+                        message: t("extensions:develop.identityProviders.smsOTP.settings" +
+                            ".errorNotifications.smsPublisherCreationError.message")
+                    }));
+                });
+            } else {
+                // Delete SMS Publisher when enabling the feature.
+                deleteSMSPublisher().then(() => {
+                    setEnableSMSOTP(false);
+                    onActivate(false);
+                }).catch((error: IdentityAppsApiException) => {
+                    const errorType : string = error.code === AuthenticatorManagementConstants.ErrorMessages
+                        .SMS_NOTIFICATION_SENDER_DELETION_ERROR_ACTIVE_SUBS.getErrorCode() ? "activeSubs" :
+                        ( error.code === AuthenticatorManagementConstants.ErrorMessages
+                            .SMS_NOTIFICATION_SENDER_DELETION_ERROR_CONNECTED_APPS.getErrorCode() ? "connectedApps"
+                            : "generic" );
+    
+                    dispatch(addAlert({
+                        description: t("extensions:develop.identityProviders.smsOTP.settings." +
+                            `errorNotifications.smsPublisherDeletionError.${errorType}.description`),
+                        level: AlertLevels.ERROR,
+                        message: t("extensions:develop.identityProviders.smsOTP.settings." +
+                            `errorNotifications.smsPublisherDeletionError.${errorType}.message`)
+                    }));
+                });
+            }
         }
     };
 

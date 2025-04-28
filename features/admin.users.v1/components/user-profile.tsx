@@ -102,6 +102,7 @@ import {
     isMultipleEmailsAndMobileNumbersEnabled,
     isSchemaReadOnly
 } from "../utils/user-management-utils";
+import UserImpersonationAction from "./user-impersonation-action";
 
 const EMAIL_ATTRIBUTE: string = ProfileConstants.SCIM2_SCHEMA_DICTIONARY.get("EMAILS");
 const MOBILE_ATTRIBUTE: string = ProfileConstants.SCIM2_SCHEMA_DICTIONARY.get("MOBILE");
@@ -198,7 +199,6 @@ export const UserProfile: FunctionComponent<UserProfilePropsInterface> = (
     } = props;
 
     const { t } = useTranslation();
-
     const dispatch: Dispatch = useDispatch();
 
     const profileSchemas: ProfileSchemaInterface[] = useSelector((state: AppState) => state.profile.profileSchemas);
@@ -286,9 +286,6 @@ export const UserProfile: FunctionComponent<UserProfilePropsInterface> = (
         }
     }, [ connectorProperties ]);
 
-    /**
-     *  .
-     */
     useEffect(() => {
         // This will load the countries to the dropdown
         setCountryList(CommonUtils.getCountryList());
@@ -1517,8 +1514,7 @@ export const UserProfile: FunctionComponent<UserProfilePropsInterface> = (
         }
 
         const resolvedUsername: string = resolveUsernameOrDefaultEmail(user, false);
-        const isUserCurrentLoggedInUser: boolean =
-            authenticatedUser?.includes(resolvedUsername);
+        const isUserCurrentLoggedInUser: boolean = authenticatedUser?.includes(resolvedUsername);
 
         return (
             <>
@@ -1535,6 +1531,13 @@ export const UserProfile: FunctionComponent<UserProfilePropsInterface> = (
                             <Show
                                 when={ featureConfig?.users?.scopes?.delete }
                             >
+                                <UserImpersonationAction
+                                    user={ user }
+                                    isReadOnly= { !hasUsersUpdatePermissions }
+                                    isUserManagedByParentOrg= { user?.isUserManagedByParentOrg }
+                                    data-componentid="user-mgt-edit-user-impersonate-action"
+                                />
+                                <Divider hidden/>
                                 <DangerZoneGroup
                                     sectionHeader={ t("user:editUser.dangerZoneGroup.header") }
                                 >

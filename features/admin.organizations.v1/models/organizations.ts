@@ -149,3 +149,7 @@ export interface GetOrganizationsParamsInterface {
     recursive?: boolean;
     isRoot?: boolean;
 }
+
+export interface SelectedOrganizationRoleInterface extends OrganizationRoleInterface {
+    selected: boolean;
+}

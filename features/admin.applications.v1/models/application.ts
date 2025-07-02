@@ -943,7 +943,7 @@ export interface RoleAudiencesInterface {
     type: string;
 }
 
-export interface RoleSharingRoleInterface {
+export interface RoleSharingInterface {
     displayName: string;
     audience:  RoleAudiencesInterface;
 };
@@ -956,7 +956,7 @@ export interface ShareApplicationWithAllOrganizationsDataInterface {
     policy: string;
     roleSharing: {
         mode: string;
-        roles?: RoleSharingRoleInterface[];
+        roles?: RoleSharingInterface[];
     }
 }
 
@@ -968,7 +968,7 @@ export interface SharedOrganizationAndRolesInterface {
     policy: string;
     roleSharing: {
         mode: string;
-        roles: RoleSharingRoleInterface[];
+        roles: RoleSharingInterface[];
     }
 }
 
@@ -983,8 +983,16 @@ export interface ShareApplicationWithSelectedOrganizationsAndRolesDataInterface 
 /**
  * Interface for the patch operation to share the application with selected organizations and roles.
  */
-export interface ShareApplicationWithSelectedOrganizationsAndRolesPatchOperationInterface {
+export interface ShareOrganizationsAndRolesPatchOperationInterface {
     op: string;
     path: string;
-    value: RoleSharingRoleInterface[];
+    value: RoleSharingInterface[];
+}
+
+/**
+ * Interface for the patch data to share the application with selected organizations and roles.
+ */
+export interface ShareOrganizationsAndRolesPatchDataInterface {
+    applicationId: string;
+    Operations: ShareOrganizationsAndRolesPatchOperationInterface[];
 }

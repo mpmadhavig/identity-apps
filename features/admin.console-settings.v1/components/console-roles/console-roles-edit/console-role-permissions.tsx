@@ -241,21 +241,18 @@ const ConsoleRolePermissions: FunctionComponent<ConsoleRolePermissionsProps> = (
      * Checks whether every scope in `categories` appears in `selectedFeatures`.
      * An empty (or absent) category is treated as "not selected".
      *
-     * In granular mode (`useEligibilityScopes`), the per-action feature scopes
-     * (`console:<feature>_create/_update/_delete`) are dropped from the check so a level backed
-     * by the same management scope as another (e.g. Branding's create/update/delete, all resolving
-     * to `internal_branding_preference_update`) is reported as selected whenever that shared scope
-     * is granted — keeping the loaded role's checkbox state consistent with the live form. The
-     * legacy read/write path keeps evaluating the raw scope names.
+     * The per-action feature scopes (`console:<feature>_create/_update/_delete/_edit`) are dropped
+     * from the check in both modes — only the underlying management scopes (the `internal_*` scopes
+     * that actually grant the capability) decide whether a box is reported as selected. This keeps
+     * the loaded role's checkbox state consistent with the live form, and lights up boxes whose
+     * required capability is already granted through a shared scope even if the per-action feature
+     * scope itself is not persisted on the role.
      */
     const allScopesSelected = (
         categories: APIResourceCollectionPermissionCategoryInterface[] | undefined,
-        selectedFeatures: string[],
-        useEligibilityScopes: boolean = false
+        selectedFeatures: string[]
     ): boolean => {
-        const names: string[] = useEligibilityScopes
-            ? getEligibilityScopeNames(extractScopeNames(categories))
-            : extractScopeNames(categories);
+        const names: string[] = getEligibilityScopeNames(extractScopeNames(categories));
 
         return names.length > 0 && names.every((name: string) => selectedFeatures.includes(name));
     };
@@ -273,6 +270,12 @@ const ConsoleRolePermissions: FunctionComponent<ConsoleRolePermissionsProps> = (
      *   Each flag is set to `true` only when all of its scopes are present in the role.
      *   Any combination of flags is valid; there is no precedence between them.
      *
+     * In both modes the eligibility check ignores the per-action feature scopes
+     * (`console:<feature>_create/_update/_delete/_edit`) and decides each level by the underlying
+     * management scopes (the `internal_*` scopes that actually grant the capability). This keeps
+     * boxes lit when a role holds the management scope but not the cosmetic feature scope, and
+     * lets levels backed by the same management scope load together.
+     *
      * @param collection - API resource collection.
      * @param selectedFeatures - Scope names already assigned to the role.
      * @returns Populated SelectedPermissionCategoryInterface, or null if nothing is selected.
@@ -282,22 +285,19 @@ const ConsoleRolePermissions: FunctionComponent<ConsoleRolePermissionsProps> = (
         selectedFeatures: string[]
     ): SelectedPermissionCategoryInterface | null => {
         if (useGranularConsolePermissions) {
-            // Granular mode. Evaluate eligibility on the management scopes, ignoring the per-action
-            // feature scopes, so levels resolving to the same management scope load together.
-            //
             // A create / update / delete level that carries no action scope of its own (only its
             // per-action feature scope — e.g. Approvals) is not actionable: its cell is read-only in
             // the form, so it must never be reported as selected here. Gate each write level on
             // `isPermissionLevelActionable` before testing its scopes, otherwise — because the bucket
             // is a cumulative superset of read and the feature scope is stripped by the eligibility
             // check — it would falsely light up whenever read is granted. `read` is always actionable.
-            const hasRead: boolean = allScopesSelected(collection.apiResources.read, selectedFeatures, true);
+            const hasRead: boolean = allScopesSelected(collection.apiResources.read, selectedFeatures);
             const hasCreate: boolean = isPermissionLevelActionable(collection, "create")
-                && allScopesSelected(collection.apiResources.create, selectedFeatures, true);
+                && allScopesSelected(collection.apiResources.create, selectedFeatures);
             const hasUpdate: boolean = isPermissionLevelActionable(collection, "update")
-                && allScopesSelected(collection.apiResources.update, selectedFeatures, true);
+                && allScopesSelected(collection.apiResources.update, selectedFeatures);
             const hasDelete: boolean = isPermissionLevelActionable(collection, "delete")
-                && allScopesSelected(collection.apiResources.delete, selectedFeatures, true);
+                && allScopesSelected(collection.apiResources.delete, selectedFeatures);
 
             if (!hasRead && !hasCreate && !hasUpdate && !hasDelete) {
                 return null;

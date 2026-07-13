@@ -110,8 +110,9 @@ const ConsoleRolePermissions: FunctionComponent<ConsoleRolePermissionsProps> = (
 
     const { t } = useTranslation();
 
-    const disabledFeatures: string[] = useSelector((state: AppState) =>
-        state?.config?.ui?.features?.consoleSettings?.disabledFeatures);
+    const disabledFeatures: string[] | undefined = useSelector(
+        (state: AppState): string[] | undefined =>
+            state?.config?.ui?.features?.consoleSettings?.disabledFeatures);
 
     const featureConfig: FeatureConfigInterface = useSelector((state: AppState) => state.config.ui.features);
     const enabledFeatureOverridesInConsoleRolePermissions: string[] = useSelector(

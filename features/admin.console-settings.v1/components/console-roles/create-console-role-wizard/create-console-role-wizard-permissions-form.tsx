@@ -218,8 +218,9 @@ const CreateConsoleRoleWizardPermissionsForm: FunctionComponent<CreateConsoleRol
     const enabledFeatureOverridesInConsoleRolePermissions: string[] = useSelector(
         (state: AppState) => state.config.ui.enabledFeatureOverridesInConsoleRolePermissions);
 
-    const disabledFeatures: string[] = useSelector((state: AppState) =>
-        state?.config?.ui?.features?.consoleSettings?.disabledFeatures);
+    const disabledFeatures: string[] | undefined = useSelector(
+        (state: AppState): string[] | undefined =>
+            state?.config?.ui?.features?.consoleSettings?.disabledFeatures);
 
     /**
      * Switches the permissions evaluation between the legacy and the granular mode.
@@ -995,11 +996,11 @@ const CreateConsoleRoleWizardPermissionsForm: FunctionComponent<CreateConsoleRol
         type: APIResourceCollectionTypes
     ): { checked: boolean; indeterminate: boolean } => {
         const sourceCollections: APIResourceCollectionInterface[] = getSourceCollections(type);
+        const selectedCount: number = Object.keys(selectedPermissions[type]).length;
 
         return {
-            checked: sourceCollections.length > 0 &&
-                Object.keys(selectedPermissions[type]).length === sourceCollections.length,
-            indeterminate: false
+            checked: sourceCollections.length > 0 && selectedCount === sourceCollections.length,
+            indeterminate: selectedCount > 0 && selectedCount < sourceCollections.length
         };
     };
 
@@ -1317,6 +1318,11 @@ const CreateConsoleRoleWizardPermissionsForm: FunctionComponent<CreateConsoleRol
                                     color="primary"
                                     checked={
                                         computeAccordionSelectAllState(APIResourceCollectionTypes.TENANT).checked
+                                    }
+                                    indeterminate={
+                                        computeAccordionSelectAllState(
+                                            APIResourceCollectionTypes.TENANT
+                                        ).indeterminate
                                     }
                                     onChange={ (e: ChangeEvent<HTMLInputElement>) => {
                                         handleSelectAll(e, APIResourceCollectionTypes.TENANT);

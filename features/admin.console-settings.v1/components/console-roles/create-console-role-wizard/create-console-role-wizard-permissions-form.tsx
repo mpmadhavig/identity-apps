@@ -794,6 +794,7 @@ const CreateConsoleRoleWizardPermissionsForm: FunctionComponent<CreateConsoleRol
 
     /**
      * Handles the accordion-level select-all checkbox change — flips every row on (as read) or off.
+     * Uses the same code path as the row-level handlers so the impact closure runs uniformly.
      *
      * Legacy mode only; the accordion select-all checkbox is not rendered in granular mode.
      */
@@ -868,44 +869,52 @@ const CreateConsoleRoleWizardPermissionsForm: FunctionComponent<CreateConsoleRol
     };
 
     /**
-     * Handles the select checkbox change event.
+     * Single-entry point every legacy row change funnels through — the row checkbox, the read/write
+     * toggle, and the accordion select-all all end up here. Keeping one code path is what makes the
+     * impact closure (defined in {@link applyLegacySelectionChange}) fire uniformly: whichever
+     * control the user clicks, related rows whose eligibility scopes the change covered light up
+     * together, and rows unchecked entirely fall away in lockstep.
      *
-     * @param e - Change event.
-     * @param collection - Selected API resource collection.
-     * @param type - Selected API resource collection type.
+     * `read: false, write: false` deletes the row's entry (equivalent to unchecking it). Otherwise
+     * the row is stored with the requested flags and the closure re-derives every other row.
+     */
+    const setLegacyRowLevel = (
+        collection: APIResourceCollectionInterface,
+        type: APIResourceCollectionTypes,
+        level: { read: boolean; write: boolean }
+    ): void => {
+        applyLegacySelectionChange((draft: SelectedPermissionsInterface) => {
+            if (!level.read && !level.write) {
+                delete draft[type][collection.id];
+
+                return;
+            }
+
+            draft[type][collection.id] = {
+                permissions: [],
+                read: level.read,
+                write: level.write
+            };
+        });
+    };
+
+    /**
+     * Row-level checkbox change (legacy mode).
      */
     const handleSelect = (
         e: ChangeEvent<HTMLInputElement>,
         collection: APIResourceCollectionInterface,
         type: APIResourceCollectionTypes
     ): void => {
-        const checked: boolean = e.target.checked;
-
-        applyLegacySelectionChange((draft: SelectedPermissionsInterface) => {
-            if (checked) {
-                draft[type][collection.id] = {
-                    permissions: [],
-                    read: true,
-                    write: false
-                };
-            } else {
-                delete draft[type][collection.id];
-            }
+        setLegacyRowLevel(collection, type, {
+            read: e.target.checked,
+            write: false
         });
     };
 
     /**
-     * Handles the permission level toggle change in legacy mode (ToggleButtonGroup).
-     *
-     * The `write` level takes precedence: when the user selects "write", only write scopes
-     * are stored and `read` is set to false.
-     *
-     * Not called in granular mode.
-     *
-     * @param _ - Mouse event.
-     * @param collection - Selected API resource collection.
-     * @param value - Selected permission level.
-     * @param type - Selected API resource collection type.
+     * Read/write ToggleButtonGroup change (legacy mode). Write takes precedence over read — the two
+     * flags are mutually exclusive on the persisted entry, mirroring the exclusive toggle in the UI.
      */
     const handlePermissionLevelChange = (
         _: MouseEvent<HTMLElement>,
@@ -913,12 +922,9 @@ const CreateConsoleRoleWizardPermissionsForm: FunctionComponent<CreateConsoleRol
         value: string,
         type: APIResourceCollectionTypes
     ): void => {
-        applyLegacySelectionChange((draft: SelectedPermissionsInterface) => {
-            draft[type][collection.id] = {
-                permissions: [],
-                read: value === "read",
-                write: value === "write"
-            };
+        setLegacyRowLevel(collection, type, {
+            read: value === "read",
+            write: value === "write"
         });
     };
 

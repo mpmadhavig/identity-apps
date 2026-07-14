@@ -17,7 +17,7 @@
  */
 
 const FEATURE_SCOPE_PREFIX: string = "console:";
-const PER_ACTION_FEATURE_SCOPE_SUFFIXES: ReadonlyArray<string> = [ "_create", "_update", "_delete", "_edit" ];
+const PER_ACTION_FEATURE_SCOPE_SUFFIXES: ReadonlyArray<string> = [ "_create", "_update", "_delete", "_edit", "_view" ];
 
 /**
  * Whether a scope is a per-action Console feature scope (see {@link PER_ACTION_FEATURE_SCOPE_SUFFIXES}).

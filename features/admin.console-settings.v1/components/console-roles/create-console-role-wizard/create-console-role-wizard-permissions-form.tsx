@@ -104,6 +104,7 @@ const TENANT_PERMISSIONS_ACCORDION_ID: string = "tenant-permissions";
 const ORGANIZATION_PERMISSIONS_ACCORDION_ID: string = "organization-permissions";
 
 type GranularPermissionLevel = "read" | "create" | "update" | "delete";
+type LegacyPermissionLevel = "read" | "write";
 
 const GRANULAR_PERMISSION_COLUMNS: ReadonlyArray<GranularPermissionLevel> = [
     "read",
@@ -217,8 +218,9 @@ const CreateConsoleRoleWizardPermissionsForm: FunctionComponent<CreateConsoleRol
     const enabledFeatureOverridesInConsoleRolePermissions: string[] = useSelector(
         (state: AppState) => state.config.ui.enabledFeatureOverridesInConsoleRolePermissions);
 
-    const disabledFeatures: string[] = useSelector((state: AppState) =>
-        state?.config?.ui?.features?.consoleSettings?.disabledFeatures);
+    const disabledFeatures: string[] | undefined = useSelector(
+        (state: AppState): string[] | undefined =>
+            state?.config?.ui?.features?.consoleSettings?.disabledFeatures);
 
     /**
      * Switches the permissions evaluation between the legacy and the granular mode.
@@ -636,37 +638,182 @@ const CreateConsoleRoleWizardPermissionsForm: FunctionComponent<CreateConsoleRol
     };
 
     /**
-     * Handles the accordion-level select-all checkbox change — flips every row on (entry
-     * with read=true) or off (empty map).
+     * The backend scope names backing a legacy (collection, level) — an empty array when the level
+     * is absent from the API response. Used by the legacy impact-closure path; the granular path
+     * has its own cached lookup.
+     */
+    const getLegacyLevelScopeNames = (
+        collection: APIResourceCollectionInterface,
+        level: LegacyPermissionLevel
+    ): string[] =>
+        collection?.apiResources?.[level]
+            ? transformResourceCollectionToPermissions(collection.apiResources[level])
+                .map((scope: PermissionScopeInterface) => scope.value)
+            : [];
+
+    /**
+     * Legacy counterpart of {@link deriveSelectedFromScopes}: for every collection, checks whether
+     * write's (or, failing that, read's) eligibility scopes are all present in `grantedScopeNames`,
+     * and lights up the row accordingly. Write wins when both are covered — same precedence as the
+     * old `handlePermissionLevelChange` used to enforce directly.
+     *
+     * Because the eligibility check strips the per-action feature scopes, two collections backed by
+     * the same underlying management scope light up together: selecting one row's read (or write)
+     * now marks every other row whose eligibility scopes the change made covered.
+     */
+    const deriveLegacySelectedFromScopes = (grantedScopeNames: Set<string>): SelectedPermissionsInterface => {
+        const result: SelectedPermissionsInterface = { organization: {}, tenant: {} };
+
+        [ APIResourceCollectionTypes.TENANT, APIResourceCollectionTypes.ORGANIZATION ].forEach(
+            (type: APIResourceCollectionTypes) => {
+                getSourceCollections(type).forEach((collection: APIResourceCollectionInterface) => {
+                    const readEligibility: string[] =
+                        getEligibilityScopeNames(getLegacyLevelScopeNames(collection, "read"));
+                    const writeEligibility: string[] =
+                        getEligibilityScopeNames(getLegacyLevelScopeNames(collection, "write"));
+
+                    const readCovered: boolean = readEligibility.length > 0
+                        && readEligibility.every(
+                            (name: string) => grantedScopeNames.has(qualifyScope(type, name)));
+                    const writeCovered: boolean = writeEligibility.length > 0
+                        && writeEligibility.every(
+                            (name: string) => grantedScopeNames.has(qualifyScope(type, name)));
+
+                    if (writeCovered) {
+                        result[type][collection.id] = {
+                            permissions: transformResourceCollectionToPermissions(
+                                collection.apiResources.write ?? collection.apiResources.read
+                            ),
+                            read: false,
+                            write: true
+                        };
+                    } else if (readCovered) {
+                        result[type][collection.id] = {
+                            permissions: transformResourceCollectionToPermissions(collection.apiResources.read),
+                            read: true,
+                            write: false
+                        };
+                    }
+                });
+            }
+        );
+
+        return result;
+    };
+
+    /**
+     * Legacy counterpart of {@link applyGranularSelectionChange}. Derives the current row state from
+     * the granted scopes, lets the caller flip one or more rows on that draft, then:
+     *   1. rebuilds the scope set from the post-toggle boxes — shared scopes stay alive as long as
+     *      any still-checked row carries them, so unrelated rows are undisturbed;
+     *   2. force-removes the marginal scopes of any row switched off (or downgraded from write→read),
+     *      so a management scope shared across rows is dropped rather than kept alive by a sibling
+     *      that is still checked;
+     *   3. re-derives the full table from the resulting scopes, lighting up every row a shared scope
+     *      now covers (this is what makes "one row selects other relevant rows too" work);
+     *   4. tightens the stored scope set down to exactly what the re-derived table backs, so persisted
+     *      scopes never drift from what the UI shows.
+     */
+    const applyLegacySelectionChange = (mutate: (draft: SelectedPermissionsInterface) => void): void => {
+        const draft: SelectedPermissionsInterface = deriveLegacySelectedFromScopes(grantedScopes);
+        const before: SelectedPermissionsInterface = cloneDeep(draft);
+
+        mutate(draft);
+
+        // Collect scopes to force-remove for rows that were unchecked or downgraded from write→read.
+        const scopesToRemove: Set<string> = new Set<string>();
+
+        [ APIResourceCollectionTypes.TENANT, APIResourceCollectionTypes.ORGANIZATION ].forEach(
+            (type: APIResourceCollectionTypes) => {
+                getSourceCollections(type).forEach((collection: APIResourceCollectionInterface) => {
+                    const wasEntry: SelectedPermissionCategoryInterface | undefined =
+                        before[type][collection.id];
+                    const nextEntry: SelectedPermissionCategoryInterface | undefined =
+                        draft[type][collection.id];
+
+                    const wasRead: boolean = !!wasEntry?.read;
+                    const wasWrite: boolean = !!wasEntry?.write;
+                    const isRead: boolean = !!nextEntry?.read;
+                    const isWrite: boolean = !!nextEntry?.write;
+
+                    // Downgraded from write to read (or unchecked) — drop write-only scopes.
+                    if (wasWrite && !isWrite) {
+                        const readNames: Set<string> =
+                            new Set<string>(getLegacyLevelScopeNames(collection, "read"));
+                        const marginalWriteNames: string[] =
+                            getLegacyLevelScopeNames(collection, "write")
+                                .filter((name: string) => !readNames.has(name));
+
+                        marginalWriteNames.forEach(
+                            (name: string) => scopesToRemove.add(qualifyScope(type, name)));
+                    }
+
+                    // Row unchecked entirely — drop read scopes too.
+                    if ((wasRead || wasWrite) && !isRead && !isWrite) {
+                        getLegacyLevelScopeNames(collection, "read").forEach(
+                            (name: string) => scopesToRemove.add(qualifyScope(type, name)));
+                    }
+                });
+            }
+        );
+
+        // Rebuild the granted scope set from the post-toggle boxes.
+        const intendedScopes: Set<string> = new Set<string>();
+
+        [ APIResourceCollectionTypes.TENANT, APIResourceCollectionTypes.ORGANIZATION ].forEach(
+            (type: APIResourceCollectionTypes) => {
+                getSourceCollections(type).forEach((collection: APIResourceCollectionInterface) => {
+                    const entry: SelectedPermissionCategoryInterface | undefined = draft[type][collection.id];
+
+                    if (!entry) {
+                        return;
+                    }
+
+                    const level: LegacyPermissionLevel | null =
+                        entry.write ? "write" : entry.read ? "read" : null;
+
+                    if (level === null) {
+                        return;
+                    }
+
+                    getLegacyLevelScopeNames(collection, level).forEach(
+                        (name: string) => intendedScopes.add(qualifyScope(type, name)));
+                });
+            }
+        );
+
+        scopesToRemove.forEach((scope: string) => intendedScopes.delete(scope));
+
+        const nextSelected: SelectedPermissionsInterface = deriveLegacySelectedFromScopes(intendedScopes);
+        const tightenedScopes: Set<string> = deriveScopesFromSelection(nextSelected);
+
+        setGrantedScopes(tightenedScopes);
+        setSelectedPermissions(nextSelected);
+        processPermissionsChange(nextSelected);
+    };
+
+    /**
+     * Handles the accordion-level select-all checkbox change — flips every row on (as read) or off.
+     * Uses the same code path as the row-level handlers so the impact closure runs uniformly.
      *
      * Legacy mode only; the accordion select-all checkbox is not rendered in granular mode.
      */
     const handleSelectAll = (e: ChangeEvent<HTMLInputElement>, type: APIResourceCollectionTypes): void => {
-        const _selectedPermissions: SelectedPermissionsInterface = cloneDeep(selectedPermissions);
-        const sourceCollections: APIResourceCollectionInterface[] = getSourceCollections(type);
+        const checked: boolean = e.target.checked;
 
-        if (e.target.checked) {
-            _selectedPermissions[type] = sourceCollections.reduce(
-                (
-                    result: { [key: string]: SelectedPermissionCategoryInterface },
-                    collection: APIResourceCollectionInterface
-                ) => {
-                    result[collection.id] = {
-                        permissions: transformResourceCollectionToPermissions(collection.apiResources.read),
+        applyLegacySelectionChange((draft: SelectedPermissionsInterface) => {
+            if (checked) {
+                getSourceCollections(type).forEach((collection: APIResourceCollectionInterface) => {
+                    draft[type][collection.id] = {
+                        permissions: [],
                         read: true,
                         write: false
                     };
-
-                    return result;
-                },
-                {}
-            );
-        } else {
-            _selectedPermissions[type] = {};
-        }
-
-        setSelectedPermissions(_selectedPermissions);
-        processPermissionsChange(_selectedPermissions);
+                });
+            } else {
+                draft[type] = {};
+            }
+        });
     };
 
     /**
@@ -722,46 +869,52 @@ const CreateConsoleRoleWizardPermissionsForm: FunctionComponent<CreateConsoleRol
     };
 
     /**
-     * Handles the select checkbox change event.
+     * Single-entry point every legacy row change funnels through — the row checkbox, the read/write
+     * toggle, and the accordion select-all all end up here. Keeping one code path is what makes the
+     * impact closure (defined in {@link applyLegacySelectionChange}) fire uniformly: whichever
+     * control the user clicks, related rows whose eligibility scopes the change covered light up
+     * together, and rows unchecked entirely fall away in lockstep.
      *
-     * @param e - Change event.
-     * @param collection - Selected API resource collection.
-     * @param type - Selected API resource collection type.
+     * `read: false, write: false` deletes the row's entry (equivalent to unchecking it). Otherwise
+     * the row is stored with the requested flags and the closure re-derives every other row.
+     */
+    const setLegacyRowLevel = (
+        collection: APIResourceCollectionInterface,
+        type: APIResourceCollectionTypes,
+        level: { read: boolean; write: boolean }
+    ): void => {
+        applyLegacySelectionChange((draft: SelectedPermissionsInterface) => {
+            if (!level.read && !level.write) {
+                delete draft[type][collection.id];
+
+                return;
+            }
+
+            draft[type][collection.id] = {
+                permissions: [],
+                read: level.read,
+                write: level.write
+            };
+        });
+    };
+
+    /**
+     * Row-level checkbox change (legacy mode).
      */
     const handleSelect = (
         e: ChangeEvent<HTMLInputElement>,
         collection: APIResourceCollectionInterface,
         type: APIResourceCollectionTypes
     ): void => {
-        const { id, apiResources } = collection;
-        const _selectedPermissions: SelectedPermissionsInterface = cloneDeep(selectedPermissions);
-
-        if (e.target.checked) {
-            _selectedPermissions[type][id] = {
-                permissions: transformResourceCollectionToPermissions(apiResources.read),
-                read: true,
-                write: false
-            };
-        } else {
-            delete _selectedPermissions[type][id];
-        }
-
-        setSelectedPermissions(_selectedPermissions);
-        processPermissionsChange(_selectedPermissions);
+        setLegacyRowLevel(collection, type, {
+            read: e.target.checked,
+            write: false
+        });
     };
 
     /**
-     * Handles the permission level toggle change in legacy mode (ToggleButtonGroup).
-     *
-     * The `write` level takes precedence: when the user selects "write", only write scopes
-     * are stored and `read` is set to false.
-     *
-     * Not called in granular mode.
-     *
-     * @param _ - Mouse event.
-     * @param collection - Selected API resource collection.
-     * @param value - Selected permission level.
-     * @param type - Selected API resource collection type.
+     * Read/write ToggleButtonGroup change (legacy mode). Write takes precedence over read — the two
+     * flags are mutually exclusive on the persisted entry, mirroring the exclusive toggle in the UI.
      */
     const handlePermissionLevelChange = (
         _: MouseEvent<HTMLElement>,
@@ -769,25 +922,10 @@ const CreateConsoleRoleWizardPermissionsForm: FunctionComponent<CreateConsoleRol
         value: string,
         type: APIResourceCollectionTypes
     ): void => {
-        const { id, apiResources } = collection;
-        const _selectedPermissions: SelectedPermissionsInterface = cloneDeep(selectedPermissions);
-
-        /**
-         * In practice `handlePermissionLevelChange` is only called when the
-         * collection's row checkbox is checked, so `read` is always present.
-         */
-        const legacyCategories: APIResourceCollectionPermissionCategoryInterface[] =
-            (apiResources[value as keyof typeof apiResources] as
-                APIResourceCollectionPermissionCategoryInterface[] | undefined) ?? apiResources.read;
-
-        _selectedPermissions[type][id] = {
-            permissions: transformResourceCollectionToPermissions(legacyCategories),
+        setLegacyRowLevel(collection, type, {
             read: value === "read",
             write: value === "write"
-        };
-
-        setSelectedPermissions(_selectedPermissions);
-        processPermissionsChange(_selectedPermissions);
+        });
     };
 
     /**
@@ -864,11 +1002,11 @@ const CreateConsoleRoleWizardPermissionsForm: FunctionComponent<CreateConsoleRol
         type: APIResourceCollectionTypes
     ): { checked: boolean; indeterminate: boolean } => {
         const sourceCollections: APIResourceCollectionInterface[] = getSourceCollections(type);
+        const selectedCount: number = Object.keys(selectedPermissions[type]).length;
 
         return {
-            checked: sourceCollections.length > 0 &&
-                Object.keys(selectedPermissions[type]).length === sourceCollections.length,
-            indeterminate: false
+            checked: sourceCollections.length > 0 && selectedCount === sourceCollections.length,
+            indeterminate: selectedCount > 0 && selectedCount < sourceCollections.length
         };
     };
 
@@ -1186,6 +1324,11 @@ const CreateConsoleRoleWizardPermissionsForm: FunctionComponent<CreateConsoleRol
                                     color="primary"
                                     checked={
                                         computeAccordionSelectAllState(APIResourceCollectionTypes.TENANT).checked
+                                    }
+                                    indeterminate={
+                                        computeAccordionSelectAllState(
+                                            APIResourceCollectionTypes.TENANT
+                                        ).indeterminate
                                     }
                                     onChange={ (e: ChangeEvent<HTMLInputElement>) => {
                                         handleSelectAll(e, APIResourceCollectionTypes.TENANT);

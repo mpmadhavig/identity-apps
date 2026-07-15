@@ -90,7 +90,8 @@ export const UserGroupsList: FunctionComponent<UserGroupsPropsInterface> = (
     const groupsFeatureConfig: FeatureAccessConfigInterface = useSelector(
         (state: AppState) => state?.config?.ui?.features?.groups);
 
-    const hasGroupsUpdatePermission: boolean = useRequiredScopes(groupsFeatureConfig?.scopes?.update);
+    const groupUpdateScopes: string[] = groupsFeatureConfig?.scopes?.update ?? [];
+    const hasGroupsUpdatePermission: boolean = useRequiredScopes(groupUpdateScopes);
 
     /**
      * Group memberships are updated through the SCIM2 Groups PATCH API, which requires

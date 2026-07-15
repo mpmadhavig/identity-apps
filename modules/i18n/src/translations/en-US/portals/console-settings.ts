@@ -61,7 +61,7 @@ export const consoleSettings: ConsoleSettingsNS = {
             organizationPermissions: {
                 label: "Organization Permissions"
             },
-            permissionsCount: "{{count}} Permissions",
+            permissionsCount: "Permissions: {{count}}",
             tenantPermissions: {
                 label: "Root Organization Permissions"
             }
